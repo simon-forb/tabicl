@@ -1,18 +1,17 @@
 """
-Rotary positional embedding 
+Rotary positional embedding
 
 Copy from https://github.com/lucidrains/rotary-embedding-torch
 """
 
 from __future__ import annotations
+
 from math import pi
+from typing import Literal
 
 import torch
-from torch import nn, einsum, broadcast_tensors, Tensor
-
 from einops import rearrange, repeat
-
-from typing import Literal
+from torch import Tensor, broadcast_tensors, einsum, nn
 
 
 def exists(val):
@@ -48,9 +47,9 @@ def apply_rotary_emb(freqs, t, start_index=0, scale=1.0, seq_dim=-2):
     rot_dim = freqs.shape[-1]
     end_index = start_index + rot_dim
 
-    assert (
-        rot_dim <= t.shape[-1]
-    ), f"feature dimension {t.shape[-1]} is not of sufficient size to rotate in all the positions {rot_dim}"
+    assert rot_dim <= t.shape[-1], (
+        f"feature dimension {t.shape[-1]} is not of sufficient size to rotate in all the positions {rot_dim}"
+    )
 
     # Split t into three parts: left, middle (to be transformed), and right
     t_left = t[..., :start_index]
@@ -58,7 +57,9 @@ def apply_rotary_emb(freqs, t, start_index=0, scale=1.0, seq_dim=-2):
     t_right = t[..., end_index:]
 
     # Apply rotary embeddings without modifying t in place
-    t_transformed = (t_middle * freqs.cos() * scale) + (rotate_half(t_middle) * freqs.sin() * scale)
+    t_transformed = (t_middle * freqs.cos() * scale) + (
+        rotate_half(t_middle) * freqs.sin() * scale
+    )
 
     out = torch.cat((t_left, t_transformed, t_right), dim=-1)
 
@@ -178,7 +179,9 @@ class RotaryEmbedding(nn.Module):
         if exists(custom_freqs):
             freqs = custom_freqs
         elif freqs_for == "lang":
-            freqs = 1.0 / (theta ** (torch.arange(0, dim, 2)[: (dim // 2)].float() / dim))
+            freqs = 1.0 / (
+                theta ** (torch.arange(0, dim, 2)[: (dim // 2)].float() / dim)
+            )
         elif freqs_for == "pixel":
             freqs = torch.linspace(1.0, max_freq / 2, dim // 2) * pi
         elif freqs_for == "constant":
@@ -230,14 +233,16 @@ class RotaryEmbedding(nn.Module):
         self.register_buffer(key, value, persistent=False)
 
     def get_seq_pos(self, seq_len, device, dtype, offset=0):
-        return (torch.arange(seq_len, device=device, dtype=dtype) + offset) / self.interpolate_factor
+        return (
+            torch.arange(seq_len, device=device, dtype=dtype) + offset
+        ) / self.interpolate_factor
 
     def rotate_queries_or_keys(self, t, seq_dim=None, offset=0, scale=None):
         seq_dim = default(seq_dim, self.default_seq_dim)
 
-        assert not self.use_xpos or exists(
-            scale
-        ), "you must use `.rotate_queries_and_keys` method instead and pass in both queries and keys, for length extrapolatable rotary embeddings"
+        assert not self.use_xpos or exists(scale), (
+            "you must use `.rotate_queries_and_keys` method instead and pass in both queries and keys, for length extrapolatable rotary embeddings"
+        )
 
         device, dtype, seq_len = t.device, t.dtype, t.shape[seq_dim]
 
@@ -251,7 +256,11 @@ class RotaryEmbedding(nn.Module):
         return apply_rotary_emb(freqs, t, scale=default(scale, 1.0), seq_dim=seq_dim)
 
     def rotate_queries_with_cached_keys(self, q, k, seq_dim=None, offset=0):
-        dtype, device, seq_dim = q.dtype, q.device, default(seq_dim, self.default_seq_dim)
+        dtype, device, seq_dim = (
+            q.dtype,
+            q.device,
+            default(seq_dim, self.default_seq_dim),
+        )
 
         q_len, k_len = q.shape[seq_dim], k.shape[seq_dim]
         assert q_len <= k_len
@@ -264,7 +273,9 @@ class RotaryEmbedding(nn.Module):
             q_scale = self.get_scale(seq[-q_len:]).type(dtype)
             k_scale = self.get_scale(seq).type(dtype)
 
-        rotated_q = self.rotate_queries_or_keys(q, seq_dim=seq_dim, scale=q_scale, offset=k_len - q_len + offset)
+        rotated_q = self.rotate_queries_or_keys(
+            q, seq_dim=seq_dim, scale=q_scale, offset=k_len - q_len + offset
+        )
         rotated_k = self.rotate_queries_or_keys(k, seq_dim=seq_dim, scale=k_scale**-1)
 
         rotated_q = rotated_q.type(q.dtype)
@@ -300,7 +311,11 @@ class RotaryEmbedding(nn.Module):
 
         should_cache = self.cache_if_possible and exists(seq_len)
 
-        if should_cache and exists(self.cached_scales) and (seq_len + offset) <= self.cached_scales.shape[0]:
+        if (
+            should_cache
+            and exists(self.cached_scales)
+            and (seq_len + offset) <= self.cached_scales.shape[0]
+        ):
             return self.cached_scales[offset : (offset + seq_len)]
 
         scale = 1.0
@@ -338,10 +353,17 @@ class RotaryEmbedding(nn.Module):
     @torch.autocast("cuda", enabled=False)
     def forward(self, t: Tensor, seq_len=None, offset=0):
         should_cache = (
-            self.cache_if_possible and not self.learned_freq and exists(seq_len) and self.freqs_for != "pixel"
+            self.cache_if_possible
+            and not self.learned_freq
+            and exists(seq_len)
+            and self.freqs_for != "pixel"
         )
 
-        if should_cache and exists(self.cached_freqs) and (offset + seq_len) <= self.cached_freqs.shape[0]:
+        if (
+            should_cache
+            and exists(self.cached_freqs)
+            and (offset + seq_len) <= self.cached_freqs.shape[0]
+        ):
             return self.cached_freqs[offset : (offset + seq_len)].detach()
 
         freqs = self.freqs

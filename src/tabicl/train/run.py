@@ -1,25 +1,22 @@
 from __future__ import annotations
 
+import functools
+import math
 import os
 import timeit
 import warnings
-import functools
 from contextlib import nullcontext
 
-import math
 import numpy as np
-
 import torch
-from torch import nn
-from torch import optim
 import torch.nn.functional as F
-from torch.utils.data import DataLoader
+import wandb
+from torch import nn, optim
+from torch.distributed import destroy_process_group, init_process_group
 from torch.multiprocessing import set_start_method
 from torch.nn.parallel import DistributedDataParallel as DDP
-from torch.distributed import init_process_group, destroy_process_group
-
+from torch.utils.data import DataLoader
 from tqdm import tqdm
-import wandb
 
 from tabicl import TabICL
 from tabicl.prior.dataset import PriorDataset
@@ -28,7 +25,9 @@ from tabicl.train.optim import get_scheduler
 from tabicl.train.train_config import build_parser
 
 warnings.filterwarnings(
-    "ignore", message=".*The PyTorch API of nested tensors is in prototype stage.*", category=UserWarning
+    "ignore",
+    message=".*The PyTorch API of nested tensors is in prototype stage.*",
+    category=UserWarning,
 )
 
 
@@ -112,7 +111,9 @@ class Trainer:
 
             # Adjust batch size for distributed training
             original_batch_size = self.config.batch_size
-            self.config.batch_size = math.ceil(original_batch_size / self.ddp_world_size)
+            self.config.batch_size = math.ceil(
+                original_batch_size / self.ddp_world_size
+            )
 
             if self.master_process:
                 print(f"DDP training with {self.ddp_world_size} processes")
@@ -217,7 +218,9 @@ class Trainer:
 
         # Wrap model into DDP container if using distributed training
         if self.ddp:
-            self.model = DDP(model, device_ids=[self.ddp_local_rank], broadcast_buffers=False)
+            self.model = DDP(
+                model, device_ids=[self.ddp_local_rank], broadcast_buffers=False
+            )
             self.raw_model = self.model.module
         else:
             self.model = model
@@ -271,14 +274,18 @@ class Trainer:
             num_workers=1,
             prefetch_factor=4,
             pin_memory=True if self.config.prior_device == "cpu" else False,
-            pin_memory_device=self.config.device if self.config.prior_device == "cpu" else "",
+            pin_memory_device=self.config.device
+            if self.config.prior_device == "cpu"
+            else "",
         )
 
     def configure_optimizer(self):
         """Configure optimizer and scheduler."""
 
         self.optimizer = optim.AdamW(
-            params=self.raw_model.parameters(), lr=self.config.lr, weight_decay=self.config.weight_decay
+            params=self.raw_model.parameters(),
+            lr=self.config.lr,
+            weight_decay=self.config.weight_decay,
         )
         self.scheduler = get_scheduler(config=self.config, optimizer=self.optimizer)
 
@@ -291,7 +298,10 @@ class Trainer:
             if self.master_process:
                 print(f"Automatic Mixed Precision is enabled.")
             self.amp_ctx = torch.autocast(
-                device_type="cuda", dtype=torch.float16 if self.config.dtype == "float16" else torch.float32
+                device_type="cuda",
+                dtype=torch.float16
+                if self.config.dtype == "float16"
+                else torch.float32,
             )
         else:
             self.amp_ctx = nullcontext()
@@ -307,14 +317,20 @@ class Trainer:
             return None
 
         # Filter for files with "ckpt" extension matching the pattern "step-*.ckpt"
-        checkpoints = [f for f in os.listdir(ckpt_dir) if f.startswith("step-") and f.endswith(".ckpt")]
+        checkpoints = [
+            f
+            for f in os.listdir(ckpt_dir)
+            if f.startswith("step-") and f.endswith(".ckpt")
+        ]
 
         if not checkpoints:
             return None
 
         # Sort the checkpoint files by step number and get the latest
         try:
-            latest_checkpoint = sorted(checkpoints, key=lambda x: int(x.split("-")[1].split(".")[0]))[-1]
+            latest_checkpoint = sorted(
+                checkpoints, key=lambda x: int(x.split("-")[1].split(".")[0])
+            )[-1]
             checkpoint_path = os.path.join(ckpt_dir, latest_checkpoint)
             return checkpoint_path
         except Exception as e:
@@ -339,7 +355,9 @@ class Trainer:
             return
 
         print(f"Loading checkpoint from {checkpoint_path}")
-        checkpoint = torch.load(checkpoint_path, map_location=self.config.device, weights_only=True)
+        checkpoint = torch.load(
+            checkpoint_path, map_location=self.config.device, weights_only=True
+        )
 
         # Load model state
         if "state_dict" not in checkpoint:
@@ -385,7 +403,11 @@ class Trainer:
         limit = self.config.max_checkpoints
 
         # Filter for files with "ckpt" extension matching the pattern "step-*.ckpt"
-        checkpoints = [f for f in os.listdir(ckpt_dir) if f.startswith("step-") and f.endswith(".ckpt")]
+        checkpoints = [
+            f
+            for f in os.listdir(ckpt_dir)
+            if f.startswith("step-") and f.endswith(".ckpt")
+        ]
         temp_checkpoints = []
         for ckpt in checkpoints:
             try:
@@ -418,7 +440,9 @@ class Trainer:
         """
 
         if self.master_process:
-            step_progress = tqdm(range(self.curr_step, self.config.max_steps), desc="Step", leave=True)
+            step_progress = tqdm(
+                range(self.curr_step, self.config.max_steps), desc="Step", leave=True
+            )
         else:
             step_progress = range(self.curr_step, self.config.max_steps)
 
@@ -443,7 +467,12 @@ class Trainer:
                 results.update({"prior_time": prior_time, "train_time": train_time})
 
                 # Update progress bar with rounded values for cleaner display
-                step_progress.set_postfix(**{k: round(v, 3) if isinstance(v, float) else v for k, v in results.items()})
+                step_progress.set_postfix(
+                    **{
+                        k: round(v, 3) if isinstance(v, float) else v
+                        for k, v in results.items()
+                    }
+                )
 
                 # Save checkpoints
                 is_temp_save = self.curr_step % self.config.save_temp_every == 0
@@ -454,7 +483,11 @@ class Trainer:
                     self.save_checkpoint(name=ckpt_name)
 
                     # Manage checkpoint limit only for temporary checkpoints
-                    if is_temp_save and not is_perm_save and self.config.max_checkpoints > 0:
+                    if (
+                        is_temp_save
+                        and not is_perm_save
+                        and self.config.max_checkpoints > 0
+                    ):
                         self.manage_checkpoint()
 
             # Logging to Weights & Biases
@@ -490,10 +523,14 @@ class Trainer:
             If sequence lengths or train sizes are inconsistent.
         """
         if len(torch.unique(micro_seq_len)) > 1:
-            raise ValueError("All datasets in the micro batch must have the same sequence length.")
+            raise ValueError(
+                "All datasets in the micro batch must have the same sequence length."
+            )
 
         if len(torch.unique(micro_train_size)) > 1:
-            raise ValueError("All datasets in the micro batch must have the same training size.")
+            raise ValueError(
+                "All datasets in the micro batch must have the same training size."
+            )
 
         seq_len = micro_seq_len[0].item()
         train_size = micro_train_size[0].item()
@@ -575,7 +612,9 @@ class Trainer:
 
         # Set DDP gradient sync for last micro batch only
         if self.ddp:
-            self.model.require_backward_grad_sync = micro_batch_idx == num_micro_batches - 1
+            self.model.require_backward_grad_sync = (
+                micro_batch_idx == num_micro_batches - 1
+            )
 
         with self.amp_ctx:
             pred = self.model(micro_X, y_train, micro_d)  # (B, test_size, max_classes)
@@ -625,8 +664,12 @@ class Trainer:
         batch = [t.to_padded_tensor(padding=0.0) if t.is_nested else t for t in batch]
 
         # Split the batch into micro-batches along the first dimension
-        num_micro_batches = math.ceil(self.config.batch_size / self.config.micro_batch_size)
-        micro_batches = [torch.split(t, self.config.micro_batch_size, dim=0) for t in batch]
+        num_micro_batches = math.ceil(
+            self.config.batch_size / self.config.micro_batch_size
+        )
+        micro_batches = [
+            torch.split(t, self.config.micro_batch_size, dim=0) for t in batch
+        ]
         micro_batches = list(zip(*micro_batches))
 
         results = {"ce": 0.0, "accuracy": 0.0}
@@ -634,12 +677,14 @@ class Trainer:
 
         for idx, micro_batch in enumerate(micro_batches):
             try:
-                micro_results = self.run_micro_batch(micro_batch, idx, num_micro_batches)
+                micro_results = self.run_micro_batch(
+                    micro_batch, idx, num_micro_batches
+                )
                 for k, v in micro_results.items():
                     results[k] += v
             except torch.cuda.OutOfMemoryError:
                 print(
-                    f"Warning: OOM error in micro-batch {idx+1}/{num_micro_batches} at step {self.curr_step}. Skipping."
+                    f"Warning: OOM error in micro-batch {idx + 1}/{num_micro_batches} at step {self.curr_step}. Skipping."
                 )
                 torch.cuda.empty_cache()
                 failed_batches += 1
@@ -655,7 +700,9 @@ class Trainer:
         # Clip the gradient
         if self.config.gradient_clipping > 0:
             self.scaler.unscale_(self.optimizer)
-            nn.utils.clip_grad_norm_(self.model.parameters(), self.config.gradient_clipping)
+            nn.utils.clip_grad_norm_(
+                self.model.parameters(), self.config.gradient_clipping
+            )
 
         # Update parameters
         self.scaler.step(self.optimizer)

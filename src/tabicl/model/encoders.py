@@ -1,9 +1,10 @@
 from __future__ import annotations
 
 from typing import Optional
-from torch import nn, Tensor
 
-from .layers import MultiheadAttentionBlock, InducedSelfAttentionBlock
+from torch import Tensor, nn
+
+from .layers import InducedSelfAttentionBlock, MultiheadAttentionBlock
 from .rope import RotaryEmbedding
 
 
@@ -56,7 +57,9 @@ class Encoder(nn.Module):
         super().__init__()
 
         if d_model % nhead != 0:
-            raise ValueError(f"d_model ({d_model}) must be divisible by nhead ({nhead})")
+            raise ValueError(
+                f"d_model ({d_model}) must be divisible by nhead ({nhead})"
+            )
 
         self.blocks = nn.ModuleList(
             [
@@ -72,7 +75,9 @@ class Encoder(nn.Module):
             ]
         )
 
-        self.rope = RotaryEmbedding(dim=d_model // nhead, theta=rope_base) if use_rope else None
+        self.rope = (
+            RotaryEmbedding(dim=d_model // nhead, theta=rope_base) if use_rope else None
+        )
 
     def forward(
         self,
@@ -108,7 +113,12 @@ class Encoder(nn.Module):
         """
         out = src
         for block in self.blocks:
-            out = block(q=out, key_padding_mask=key_padding_mask, attn_mask=attn_mask, rope=self.rope)
+            out = block(
+                q=out,
+                key_padding_mask=key_padding_mask,
+                attn_mask=attn_mask,
+                rope=self.rope,
+            )
 
         return out
 
@@ -166,7 +176,9 @@ class SetTransformer(nn.Module):
         super().__init__()
 
         if d_model % nhead != 0:
-            raise ValueError(f"d_model ({d_model}) must be divisible by nhead ({nhead})")
+            raise ValueError(
+                f"d_model ({d_model}) must be divisible by nhead ({nhead})"
+            )
 
         self.blocks = nn.ModuleList(
             [

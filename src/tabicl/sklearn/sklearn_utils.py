@@ -101,7 +101,9 @@ def _check_feature_names(estimator, X, *, reset: bool) -> None:
         return
 
     if X_feature_names is not None and fitted_feature_names is None:
-        warnings.warn(f"X has feature names, but {estimator.__class__.__name__} was fitted without feature names")
+        warnings.warn(
+            f"X has feature names, but {estimator.__class__.__name__} was fitted without feature names"
+        )
         return
 
     if X_feature_names is None and fitted_feature_names is not None:
@@ -111,7 +113,9 @@ def _check_feature_names(estimator, X, *, reset: bool) -> None:
         return
 
     # validate the feature names against the `feature_names_in_` attribute
-    if len(fitted_feature_names) != len(X_feature_names) or np.any(fitted_feature_names != X_feature_names):
+    if len(fitted_feature_names) != len(X_feature_names) or np.any(
+        fitted_feature_names != X_feature_names
+    ):
         message = "The feature names should match those that were passed during fit.\n"
         fitted_feature_names_set = set(fitted_feature_names)
         X_feature_names_set = set(X_feature_names)
@@ -278,7 +282,8 @@ def check_consistent_length(*arrays) -> None:
     lengths = [_num_samples(X) for X in arrays if X is not None]
     if len(set(lengths)) > 1:
         raise ValueError(
-            "Found input variables with inconsistent numbers of samples: %r" % [int(length) for length in lengths]
+            "Found input variables with inconsistent numbers of samples: %r"
+            % [int(length) for length in lengths]
         )
 
 

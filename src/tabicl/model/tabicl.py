@@ -1,12 +1,13 @@
 from __future__ import annotations
 
-from typing import Optional, List
-from torch import nn, Tensor
+from typing import List, Optional
+
+from torch import Tensor, nn
 
 from .embedding import ColEmbedding
+from .inference_config import InferenceConfig
 from .interaction import RowInteraction
 from .learning import ICLearning
-from .inference_config import InferenceConfig
 
 
 class TabICL(nn.Module):
@@ -144,7 +145,11 @@ class TabICL(nn.Module):
         )
 
     def _train_forward(
-        self, X: Tensor, y_train: Tensor, d: Optional[Tensor] = None, embed_with_test: bool = False
+        self,
+        X: Tensor,
+        y_train: Tensor,
+        d: Optional[Tensor] = None,
+        embed_with_test: bool = False,
     ) -> Tensor:
         """Column-wise embedding -> row-wise interaction -> dataset-wise in-context learning for training.
 
@@ -181,7 +186,10 @@ class TabICL(nn.Module):
 
         # Column-wise embedding -> Row-wise interaction
         representations = self.row_interactor(
-            self.col_embedder(X, d=d, train_size=None if embed_with_test else train_size), d=d
+            self.col_embedder(
+                X, d=d, train_size=None if embed_with_test else train_size
+            ),
+            d=d,
         )
 
         # Dataset-wise in-context learning
@@ -240,7 +248,9 @@ class TabICL(nn.Module):
         """
 
         train_size = y_train.shape[1]
-        assert train_size <= X.shape[1], "Number of training samples exceeds total samples"
+        assert train_size <= X.shape[1], (
+            "Number of training samples exceeds total samples"
+        )
 
         if inference_config is None:
             inference_config = InferenceConfig()
