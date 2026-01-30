@@ -194,6 +194,8 @@ class TabICLClassifier(ClassifierMixin, BaseEstimator):
         n_jobs: Optional[int] = None,
         verbose: bool = False,
         inference_config: Optional[InferenceConfig | Dict] = None,
+        rope_offset: int = 0,
+        rope_pin_cls_tokens: bool = False,
     ):
         self.n_estimators = n_estimators
         self.norm_methods = norm_methods
@@ -213,6 +215,8 @@ class TabICLClassifier(ClassifierMixin, BaseEstimator):
         self.random_state = random_state
         self.verbose = verbose
         self.inference_config = inference_config
+        self.rope_offset = rope_offset
+        self.rope_pin_cls_tokens = rope_pin_cls_tokens
 
     def _more_tags(self):
         """Mark classifier as non-deterministic to bypass certain sklearn tests."""
@@ -341,7 +345,11 @@ class TabICLClassifier(ClassifierMixin, BaseEstimator):
         )
 
         self.model_path_ = model_path_
-        self.model_ = TabICL(**checkpoint["config"])
+        self.model_ = TabICL(
+            **checkpoint["config"],
+            rope_offset=self.rope_offset,
+            rope_pin_cls_tokens=self.rope_pin_cls_tokens,
+        )
         self.model_.load_state_dict(checkpoint["state_dict"])
         self.model_.eval()
 

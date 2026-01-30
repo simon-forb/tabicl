@@ -53,6 +53,8 @@ class Encoder(nn.Module):
         norm_first: bool = True,
         use_rope: bool = False,
         rope_base: int = 100000,
+        rope_offset: int = 0,
+        rope_cls_gap: int = 4,
     ):
         super().__init__()
 
@@ -76,7 +78,14 @@ class Encoder(nn.Module):
         )
 
         self.rope = (
-            RotaryEmbedding(dim=d_model // nhead, theta=rope_base) if use_rope else None
+            RotaryEmbedding(
+                dim=d_model // nhead,
+                theta=rope_base,
+                rope_offset=rope_offset,
+                rope_cls_gap=rope_cls_gap,
+            )
+            if use_rope
+            else None
         )
 
     def forward(

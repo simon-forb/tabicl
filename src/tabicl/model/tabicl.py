@@ -90,6 +90,8 @@ class TabICL(nn.Module):
         dropout: float = 0.0,
         activation: str | callable = "gelu",
         norm_first: bool = True,
+        rope_offset: int = 0,
+        rope_pin_cls_tokens: bool = False,
     ):
         super().__init__()
         self.max_classes = max_classes
@@ -130,6 +132,8 @@ class TabICL(nn.Module):
             dropout=dropout,
             activation=activation,
             norm_first=norm_first,
+            rope_offset=rope_offset,
+            rope_pin_cls_tokens=rope_pin_cls_tokens,
         )
 
         icl_dim = embed_dim * row_num_cls  # CLS tokens are concatenated for ICL

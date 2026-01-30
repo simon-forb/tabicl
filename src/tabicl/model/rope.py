@@ -166,8 +166,17 @@ class RotaryEmbedding(nn.Module):
         theta_rescale_factor=1.0,
         seq_before_head_dim=False,
         cache_if_possible=True,
+        rope_offset: int = 0,
+        rope_cls_gap: int = 4,
     ):
         super().__init__()
+
+        # RoPE offset parameters.
+        assert rope_offset >= 0, "rope_offset must be non-negative"
+        self.rope_offset = rope_offset
+        assert rope_cls_gap >= 0, "rope_cls_gap must be non-negative"
+        self.rope_cls_gap = rope_cls_gap
+
         # proposed by reddit user bloc97, to rescale rotary embeddings to longer sequence length without fine-tuning
         # has some connection to NTK literature
         # https://www.reddit.com/r/LocalLLaMA/comments/14lz7j5/ntkaware_scaled_rope_allows_llama_models_to_have/
@@ -233,9 +242,17 @@ class RotaryEmbedding(nn.Module):
         self.register_buffer(key, value, persistent=False)
 
     def get_seq_pos(self, seq_len, device, dtype, offset=0):
-        return (
-            torch.arange(seq_len, device=device, dtype=dtype) + offset
-        ) / self.interpolate_factor
+        positions = torch.arange(seq_len, device=device, dtype=dtype)
+
+        # Apply offset to positions, i.e., shift positions by several steps.
+        # If specified, i.e., when self.rope_cls_gap == num_cls, the CLS tokens in the
+        # first columns will be skipped.
+        if self.rope_offset > 0:
+            positions[self.rope_cls_gap :] = (
+                positions[self.rope_cls_gap :] + self.rope_offset
+            )
+
+        return (positions + offset) / self.interpolate_factor
 
     def rotate_queries_or_keys(self, t, seq_dim=None, offset=0, scale=None):
         seq_dim = default(seq_dim, self.default_seq_dim)
